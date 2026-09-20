@@ -70,12 +70,14 @@ struct SearchViewFullScreen: View {
                 }
             }
             .refreshable {
-                viewModel.loadHighlights()
+                await Task.detached { @MainActor in
+                    await viewModel.loadHighlights()
+                }.value
             }
         }
-        .onAppear {
+        .task {
             if viewModel.hasNotFetchedYet{
-                viewModel.loadHighlights()
+                await viewModel.loadHighlights()
             }
             isSearchFieldFocused = true
             searchText = viewModel.searchQuery

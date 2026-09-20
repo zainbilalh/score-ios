@@ -48,13 +48,15 @@ struct PastGamesView: View {
                 }
                 .background(Color.white)
             }
-            .onAppear {
+            .task {
                 if vm.hasNotFetchedYet {
-                    vm.fetchGames()
+                    await vm.loadGames()
                 }
             }
             .refreshable {
-                vm.fetchGames()
+                await Task.detached { @MainActor in
+                    await vm.loadGames()
+                }.value
             }
             .onChange(of: vm.selectedSport) {
                 vm.filter()

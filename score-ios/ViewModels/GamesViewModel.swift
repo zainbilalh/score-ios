@@ -76,162 +76,41 @@ class GamesViewModel: ObservableObject
         }
     }
 
-    // Networking
-//    func fetchGames() {
-//        // Set loading state before fetch
-//        dataState = .loading
-//
-//        NetworkManager.shared.fetchGames { fetchedGames, error in
-//            DispatchQueue.main.async {
-//                self.games.removeAll()
-//                self.allPastGames.removeAll()
-//                self.allUpcomingGames.removeAll()
-//
-//                if let error = error {
-//                    self.dataState = .error(error: .networkError)
-//                    print("Error in fetchGames: \(error.localizedDescription)")
-//                    return
-//                }
-//
-//                guard let fetchedGames = fetchedGames else {
-//                    self.dataState = .error(error: .emptyData)
-//                    return
-//                }
-//
-//                var updatedGames: [Game] = []
-//                fetchedGames.indices.forEach { index in
-//                    let gameData = fetchedGames[index]
-//                    let game = Game(game: gameData)
-//                    if Sport.allCases.contains(game.sport) && game.sport != Sport.All {
-//                        // append the game only if it is upcoming/live
-//                        let now = Date()
-//                        let twoHours: TimeInterval = 2 * 60 * 60 // TODO: How to decide if a game is live
-//                        let calendar = Calendar.current
-//                        let startOfToday = calendar.startOfDay(for: now)
-//
-//                        let isLive = game.date < now && now.timeIntervalSince(game.date) <= twoHours
-//                        let isUpcoming = game.date > now
-//                        let isFinishedToday = game.date < now && game.date >= startOfToday
-//                        let isFinishedByToday = game.date < startOfToday
-//
-//                        updatedGames.append(game)
-//                        if isLive {
-//                            self.allUpcomingGames.insert(game, at: 0)
-//                        } else if isUpcoming {
-//                            self.allUpcomingGames.append(game)
-//                        } else if isFinishedToday {
-//                            self.allUpcomingGames.append(game)
-//                        }
-//                        if isFinishedByToday {
-//                            self.allPastGames.append(game)
-//                        }
-//                    }
-//                }
-//                // TODO: do this in a way that requires less copying by sorting at the top
-//                self.allPastGames.sort(by: {$0.date > $1.date})
-//                self.allUpcomingGames.sort(by: {$0.date < $1.date})
-//                self.games = updatedGames.sorted(by: {$0.date < $1.date})
-//                self.topUpcomingGames = Array(self.allUpcomingGames.prefix(3))
-//                self.topPastGames = Array(self.allPastGames.prefix(3))
-//                self.filter()
-//
-//                // Update state to success
-//                self.dataState = .success
-//            }
-//        }
-//    }
-
-    // TODO: Remove once backend is has implemented pagination with sorted dates and pages by game type
-    func fetchGames() {
-        // Set loading state before fetch
-        dataState = (hasNotFetchedYet ? .loading : .refreshing)
-
-        self.privateUpcomingGames.removeAll()
-        self.privatePastGames.removeAll()
-
-        // Start fetching from the first page
-        fetchGamesRecursively(limit: 50, offset: 0, accumulatedGames: [])
-    }
-
-    private func fetchGamesRecursively(limit: Int, offset: Int, accumulatedGames: [GamesQuery.Data.Game], retryCount: Int = 0, maxRetries: Int = 3) {
-        // Create a timeout
-        let timeoutWorkItem = DispatchWorkItem {
-            print("Request timed out for offset: \(offset)")
-            // If we haven't exceeded max retries, try again
-            if retryCount < maxRetries {
-                print("Retrying request (\(retryCount + 1)/\(maxRetries))...")
-                DispatchQueue.main.async {
-                    self.fetchGamesRecursively(limit: limit, offset: offset, accumulatedGames: accumulatedGames, retryCount: retryCount + 1, maxRetries: maxRetries)
-                }
-            } else {
-                print("Max retries exceeded. Giving up on request for offset: \(offset)")
-                DispatchQueue.main.async {
-//                    // If this was the first request and it failed after all retries, show error
-//                    if offset == 0 && accumulatedGames.isEmpty {
-//                        self.dataState = .error(error: .networkError)
-//                    } else {
-//                        // Otherwise process what we have so far
-//                        self.processGames(accumulatedGames)
-//                    }
-                    self.dataState = .error(error: .networkError)
-                }
-            }
+    @MainActor
+    func loadGames() async {
+        let isInitialLoad = hasNotFetchedYet
+        if isInitialLoad {
+            dataState = .loading
         }
-
-        // Schedule timeout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: timeoutWorkItem)
-
-        NetworkManager.shared.fetchGames(limit: limit, offset: offset) { [weak self] fetchedGames, error in
-            guard let self = self else { return }
-
-            // Cancel the timeout since we got a response
-            timeoutWorkItem.cancel()
-
-            DispatchQueue.main.async {
-                if let error = error {
-                    print("Error in fetchGames for offset \(offset): \(error.localizedDescription)")
-
-                    // If we haven't exceeded max retries, try again
-                    if retryCount < maxRetries {
-                        print("Retrying request (\(retryCount + 1)/\(maxRetries))...")
-                        self.fetchGamesRecursively(limit: limit, offset: offset, accumulatedGames: accumulatedGames, retryCount: retryCount + 1, maxRetries: maxRetries)
-                    } else {
-                        print("Max retries exceeded. Giving up on request for offset: \(offset)")
-                        // If this was the first request and it failed after all retries, show error
-                        if offset == 0 && accumulatedGames.isEmpty {
-                            self.dataState = .error(error: .networkError)
-                        } else {
-                            // Otherwise process what we have so far
-                            self.processGames(accumulatedGames)
-                        }
-                    }
-                    return
-                }
-
-                guard let fetchedGames = fetchedGames, !fetchedGames.isEmpty else {
-                    // If this is the first fetch and no games, show empty data error
+        privateUpcomingGames.removeAll()
+        privatePastGames.removeAll()
+        do {
+            var all: [GamesQuery.Data.Game] = []
+            var offset = 0
+            let limit = 50
+            while true {
+                let page = try await NetworkManager.shared.fetchGames(limit: limit, offset: offset)
+                if page.isEmpty {
                     if offset == 0 {
-                        self.dataState = .error(error: .emptyData)
-                    } else {
-//                        // Otherwise process all accumulated games
-//                        self.processGames(accumulatedGames)
-                        self.dataState = .error(error: .networkError)
+                        dataState = .error(error: .emptyData)
+                        return
                     }
-                    return
+                    break
                 }
-
-                // Combine newly fetched games with previously accumulated games
-                let allGames = accumulatedGames + fetchedGames
-
-                // If we received a full page, there might be more games to fetch
-                if fetchedGames.count == limit {
-                    // Continue fetching the next page (reset retry count for the next page)
-                    self.fetchGamesRecursively(limit: limit, offset: offset + limit, accumulatedGames: allGames, retryCount: 0, maxRetries: maxRetries)
-                } else {
-                    // We've fetched all games, process them
-                    self.processGames(allGames)
-                }
+                all.append(contentsOf: page)
+                if page.count < limit { break }
+                offset += limit
             }
+            processGames(all)
+        } catch is CancellationError {
+            // SwiftUI cancels pull-to-refresh when @Published updates rebuild the view.
+            if isInitialLoad && games.isEmpty {
+                dataState = .idle
+            } else {
+                dataState = .success
+            }
+        } catch {
+            dataState = .error(error: .networkError)
         }
     }
 
@@ -297,8 +176,8 @@ class GamesViewModel: ObservableObject
     }
 
     // Method to retry after an error
-    func retryFetch() {
-        fetchGames()
+    func retryFetch () async {
+        await loadGames()
     }
 }
 

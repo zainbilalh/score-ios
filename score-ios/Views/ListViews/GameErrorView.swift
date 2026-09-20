@@ -35,7 +35,9 @@ struct GameErrorView: View {
                 Spacer()
 
                 Button {
-                    viewModel.fetchGames()
+                    Task {
+                        await viewModel.loadGames()
+                    }
                 } label: {
                     HStack {
                         Image(systemName: "arrow.trianglehead.2.clockwise")

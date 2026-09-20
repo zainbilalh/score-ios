@@ -5,7 +5,6 @@
 //  Created by Hsia Lu wu on 11/22/24.
 //
 import Foundation
-import SwiftUI
 import Apollo
 import GameAPI
 
@@ -14,96 +13,59 @@ class NetworkManager {
     static let shared = NetworkManager()
     let apolloClient = ApolloClient(url: ScoreEnvironment.baseURL)
 
-    func fetchGames(limit: Int, offset: Int, completion: @escaping ([GamesQuery.Data.Game]?, Error?) -> Void) {
-        apolloClient.fetch(query: GamesQuery(limit: limit, offset: offset)) { result in
-            switch result {
-            case .success(let graphQLResult):
-                if let gamesData = graphQLResult.data?.games?.compactMap({ $0 }) {
-                    completion(gamesData, nil)
-                } else if let errors = graphQLResult.errors {
-                    let errorDescription = errors.map { $0.localizedDescription }.joined(separator: "\n")
-                    completion(nil, NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: errorDescription]))
-                }
-            case .failure(let error):
-                completion(nil, error)
-            }
+    func fetchGames(limit: Int, offset: Int) async throws -> [GamesQuery.Data.Game] {
+        let response = try await apolloClient.fetch(
+            query: GamesQuery(limit: Int32(limit), offset: Int32(offset)),
+            cachePolicy: .cacheFirst
+        )
+        if let games = response.data?.games?.compactMap({ $0 }) {
+            return games
         }
-    }
-
-    func fetchTeamById(by id: String, completion: @escaping (GetTeamByIdQuery.Data.Team?, Error?) -> Void) {
-        let query = GetTeamByIdQuery(id: id)
-
-        apolloClient.fetch(query: query) { result in
-            switch result {
-            case .success(let graphQLResult):
-                if let team = graphQLResult.data?.team {
-                    completion(team, nil)
-                } else if let errors = graphQLResult.errors {
-                    completion(nil, errors.first!)
-                }
-            case .failure(let error):
-                completion(nil, error)
-            }
+        if let first = response.errors?.first {
+            throw first
         }
+        return []
     }
     
-    func fetchArticles(completion: @escaping ([ArticlesQuery.Data.Article]?, Error?) -> Void) {
-        let query = ArticlesQuery(sportsType: nil)
-        
-        apolloClient.fetch(query: query) { result in
-            switch result {
-            case .success(let graphQLResult):
-                if let articlesData = graphQLResult.data?.articles?.compactMap({ $0 }) {
-                    completion(articlesData, nil)
-                } else if let errors = graphQLResult.errors {
-                    let errorDescription = errors.map { $0.localizedDescription }.joined(separator: "\n")
-                    completion(nil, NSError(domain: "GraphQL", code: 0, userInfo: [NSLocalizedDescriptionKey: errorDescription]))
-                }
-            case .failure(let error):
-                completion(nil, error)
-            }
+    func fetchTeamById(by id: String) async throws -> GetTeamByIdQuery.Data.Team? {
+        let response = try await apolloClient.fetch(
+            query: GetTeamByIdQuery(id: id),
+            cachePolicy: .cacheFirst
+        )
+        if let team = response.data?.team {
+            return team
         }
+        if let first = response.errors?.first {
+            throw first
+        }
+        return nil
     }
     
-    func fetchYouTubeVideos(completion: @escaping ([YoutubeVideosQuery.Data.YoutubeVideo]?, Error?) -> Void) {
-        let query = YoutubeVideosQuery()
-        
-        apolloClient.fetch(query: query) { result in
-            switch result {
-            case .success(let graphQLResult):
-                if let youTubeVideoData = graphQLResult.data?.youtubeVideos?.compactMap({ $0 }) {
-                    completion(youTubeVideoData, nil)
-                } else if let errors = graphQLResult.errors {
-                    let errorDescription = errors.map { $0.localizedDescription }.joined(separator: "\n")
-                    completion(nil, NSError(domain: "GraphQL", code: 0, userInfo: [NSLocalizedDescriptionKey: errorDescription]))
-                }
-            case .failure(let error):
-                completion(nil, error)
-            }
+    func fetchArticles(sportsType: String? = nil) async throws -> [ArticlesQuery.Data.Article] {
+        let response = try await apolloClient.fetch(
+            query: ArticlesQuery(sportsType: sportsType.map { .some($0) } ?? .null),
+            cachePolicy: .cacheFirst
+        )
+        if let articles = response.data?.articles?.compactMap({ $0 }) {
+            return articles
         }
+        if let first = response.errors?.first {
+            throw first
+        }
+        return []
     }
     
-    func fetchArticles() async throws -> [ArticlesQuery.Data.Article] {
-        try await withCheckedThrowingContinuation { continuation in
-            fetchArticles { articles, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: articles ?? [])
-                }
-            }
+    func fetchYoutubeVideos() async throws -> [YoutubeVideosQuery.Data.YoutubeVideo] {
+        let response = try await apolloClient.fetch(
+            query: YoutubeVideosQuery(),
+            cachePolicy: .cacheFirst
+        )
+        if let youtubeVideos = response.data?.youtubeVideos?.compactMap({ $0 }) {
+            return youtubeVideos
         }
-    }
-
-    func fetchYouTubeVideos() async throws -> [YoutubeVideosQuery.Data.YoutubeVideo] {
-        try await withCheckedThrowingContinuation { continuation in
-            fetchYouTubeVideos { videos, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: videos ?? [])
-                }
-            }
+        if let first = response.errors?.first {
+            throw first
         }
+        return []
     }
 }

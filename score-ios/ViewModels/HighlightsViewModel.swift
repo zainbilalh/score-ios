@@ -37,25 +37,31 @@ class HighlightsViewModel: ObservableObject {
     var hasNotFetchedYet: Bool { dataState == .idle }
 
     // MARK: - Loading
-    func loadHighlights() {
-        dataState = (hasNotFetchedYet ? .loading : .refreshing)
-        
-        Task {
-            do {
-                async let articles = NetworkManager.shared.fetchArticles()
-                async let videos = NetworkManager.shared.fetchYouTubeVideos()
-
-                let (articleData, videoData) = try await (articles, videos)
-
-                processHighlights(articleData, videoData)
-            } catch {
-                handleError(.networkError)
+    @MainActor
+    func loadHighlights () async {
+        let isInitialLoad = hasNotFetchedYet
+        if isInitialLoad {
+            dataState = .loading
+        }
+        do {
+            async let articles = NetworkManager.shared.fetchArticles()
+            async let videos = NetworkManager.shared.fetchYoutubeVideos()
+            let (articleData, videoData) = try await (articles, videos)
+            processHighlights(articleData, videoData)
+        } catch is CancellationError {
+            // SwiftUI cancels pull-to-refresh when @Published updates rebuild the view.
+            if isInitialLoad && allHighlights.isEmpty {
+                dataState = .idle
+            } else {
+                dataState = .success
             }
+        } catch {
+            handleError(.networkError)
         }
     }
     
-    func retryFetch(isRefresh: Bool) {
-        loadHighlights()
+    func retryFetch(isRefresh: Bool) async {
+        await loadHighlights()
     }
     
     /**

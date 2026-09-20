@@ -25,9 +25,9 @@ struct HighlightView: View {
                 }
             }
         }
-        .onAppear {
+        .task {
             if viewModel.dataState == .idle {
-                viewModel.loadHighlights()
+                await viewModel.loadHighlights()
             }
             viewModel.clearSearch()
         }
@@ -89,7 +89,9 @@ struct HighlightContentView: View {
             }
         }
         .refreshable {
-            viewModel.loadHighlights()
+            await Task.detached { @MainActor in
+                await viewModel.loadHighlights()
+            }.value
         }
     }
 }
