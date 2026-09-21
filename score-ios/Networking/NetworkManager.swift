@@ -31,6 +31,28 @@ class NetworkManager {
         return []
     }
 
+    /// Fetches games whose `utc_date` falls between `startDate` and `endDate` (inclusive).
+    func fetchGamesByDate(
+        startDate: Date,
+        endDate: Date,
+        forceNetwork: Bool = false
+    ) async throws -> [GamesByDateQuery.Data.GamesByDate] {
+        let response = try await apolloClient.fetch(
+            query: GamesByDateQuery(
+                startDate: Date.dateToStringFull(date: startDate),
+                endDate: Date.dateToStringFull(date: endDate)
+            ),
+            cachePolicy: cachePolicy(forceNetwork: forceNetwork)
+        )
+        if let games = response.data?.gamesByDate?.compactMap({ $0 }) {
+            return games
+        }
+        if let first = response.errors?.first {
+            throw first
+        }
+        return []
+    }
+
     func fetchTeamById(by id: String, forceNetwork: Bool = false) async throws -> GetTeamByIdQuery.Data.Team? {
         let response = try await apolloClient.fetch(
             query: GetTeamByIdQuery(id: id),
