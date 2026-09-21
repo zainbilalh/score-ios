@@ -39,9 +39,7 @@ struct DetailedHighlightsView: View {
             }
             .background(Constants.Colors.white.ignoresSafeArea())
             .refreshable {
-                await Task.detached { @MainActor in
-                    await viewModel.loadHighlights()
-                }.value
+                await viewModel.loadHighlights(forceNetwork: true)
             }
             .safeAreaInset(edge: .bottom) {
                 Color.clear.frame(height: 200)

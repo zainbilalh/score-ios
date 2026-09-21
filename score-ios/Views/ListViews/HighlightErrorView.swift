@@ -1,16 +1,14 @@
 //
-//  GameErrorView.swift
+//  HighlightErrorView.swift
 //  score-ios
 //
-//  Created by Jayson Hahn on 3/22/25.
+//  Created by Zain Bilal on 9/20/26.
 //
 
-import Foundation
 import SwiftUI
 
-struct GameErrorView: View {
-
-    @ObservedObject var viewModel: GamesViewModel
+struct HighlightErrorView: View {
+    @EnvironmentObject var viewModel: HighlightsViewModel
 
     var body: some View {
         ZStack {
@@ -25,7 +23,7 @@ struct GameErrorView: View {
                     .frame(width: 64, height: 64)
                     .padding(.bottom, 16)
 
-                Text("Oops! Schedules failed to load.")
+                Text("Oops! Highlights failed to load.")
                     .font(Constants.Fonts.Header.h2)
                     .padding(.bottom, 8)
 
@@ -36,7 +34,7 @@ struct GameErrorView: View {
 
                 Button {
                     Task {
-                        await viewModel.loadGames(forceNetwork: true)
+                        await viewModel.loadHighlights(forceNetwork: true)
                     }
                 } label: {
                     HStack {
@@ -54,5 +52,9 @@ struct GameErrorView: View {
             }
         }
     }
+}
 
+#Preview {
+    HighlightErrorView()
+        .environmentObject(HighlightsViewModel.shared)
 }

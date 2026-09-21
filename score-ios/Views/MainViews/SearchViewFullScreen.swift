@@ -70,9 +70,7 @@ struct SearchViewFullScreen: View {
                 }
             }
             .refreshable {
-                await Task.detached { @MainActor in
-                    await viewModel.loadHighlights()
-                }.value
+                await viewModel.loadHighlights(forceNetwork: true)
             }
         }
         .task {

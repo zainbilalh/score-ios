@@ -13,10 +13,14 @@ class NetworkManager {
     static let shared = NetworkManager()
     let apolloClient = ApolloClient(url: ScoreEnvironment.baseURL)
 
-    func fetchGames(limit: Int, offset: Int) async throws -> [GamesQuery.Data.Game] {
+    private func cachePolicy(forceNetwork: Bool) -> CachePolicy.Query.SingleResponse {
+        forceNetwork ? .networkOnly : .cacheFirst
+    }
+
+    func fetchGames(limit: Int, offset: Int, forceNetwork: Bool = false) async throws -> [GamesQuery.Data.Game] {
         let response = try await apolloClient.fetch(
             query: GamesQuery(limit: Int32(limit), offset: Int32(offset)),
-            cachePolicy: .cacheFirst
+            cachePolicy: cachePolicy(forceNetwork: forceNetwork)
         )
         if let games = response.data?.games?.compactMap({ $0 }) {
             return games
@@ -26,11 +30,11 @@ class NetworkManager {
         }
         return []
     }
-    
-    func fetchTeamById(by id: String) async throws -> GetTeamByIdQuery.Data.Team? {
+
+    func fetchTeamById(by id: String, forceNetwork: Bool = false) async throws -> GetTeamByIdQuery.Data.Team? {
         let response = try await apolloClient.fetch(
             query: GetTeamByIdQuery(id: id),
-            cachePolicy: .cacheFirst
+            cachePolicy: cachePolicy(forceNetwork: forceNetwork)
         )
         if let team = response.data?.team {
             return team
@@ -40,11 +44,11 @@ class NetworkManager {
         }
         return nil
     }
-    
-    func fetchArticles(sportsType: String? = nil) async throws -> [ArticlesQuery.Data.Article] {
+
+    func fetchArticles(sportsType: String? = nil, forceNetwork: Bool = false) async throws -> [ArticlesQuery.Data.Article] {
         let response = try await apolloClient.fetch(
             query: ArticlesQuery(sportsType: sportsType.map { .some($0) } ?? .null),
-            cachePolicy: .cacheFirst
+            cachePolicy: cachePolicy(forceNetwork: forceNetwork)
         )
         if let articles = response.data?.articles?.compactMap({ $0 }) {
             return articles
@@ -54,11 +58,11 @@ class NetworkManager {
         }
         return []
     }
-    
-    func fetchYoutubeVideos() async throws -> [YoutubeVideosQuery.Data.YoutubeVideo] {
+
+    func fetchYoutubeVideos(forceNetwork: Bool = false) async throws -> [YoutubeVideosQuery.Data.YoutubeVideo] {
         let response = try await apolloClient.fetch(
             query: YoutubeVideosQuery(),
-            cachePolicy: .cacheFirst
+            cachePolicy: cachePolicy(forceNetwork: forceNetwork)
         )
         if let youtubeVideos = response.data?.youtubeVideos?.compactMap({ $0 }) {
             return youtubeVideos

@@ -57,9 +57,7 @@ struct UpcomingGamesView: View {
                 }
             }
             .refreshable {
-                await Task.detached { @MainActor in
-                    await vm.loadGames()
-                }.value
+                await vm.loadGames(forceNetwork: true)
             }
             .onChange(of: vm.selectedSport) {
                 vm.filter()

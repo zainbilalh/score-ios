@@ -37,31 +37,35 @@ class HighlightsViewModel: ObservableObject {
     var hasNotFetchedYet: Bool { dataState == .idle }
 
     // MARK: - Loading
-    @MainActor
-    func loadHighlights () async {
-        let isInitialLoad = hasNotFetchedYet
-        if isInitialLoad {
+    func loadHighlights(forceNetwork: Bool = false) async {
+        // Soft refresh: if we already showed content, keep it on screen until a successful replace.
+        let preserveExistingUI = (dataState == .success)
+        if !preserveExistingUI {
             dataState = .loading
         }
+
         do {
-            async let articles = NetworkManager.shared.fetchArticles()
-            async let videos = NetworkManager.shared.fetchYoutubeVideos()
+            async let articles = NetworkManager.shared.fetchArticles(forceNetwork: forceNetwork)
+            async let videos = NetworkManager.shared.fetchYoutubeVideos(forceNetwork: forceNetwork)
             let (articleData, videoData) = try await (articles, videos)
             processHighlights(articleData, videoData)
         } catch is CancellationError {
-            // SwiftUI cancels pull-to-refresh when @Published updates rebuild the view.
-            if isInitialLoad && allHighlights.isEmpty {
-                dataState = .idle
-            } else {
+            if preserveExistingUI {
                 dataState = .success
+            } else {
+                dataState = .idle
             }
         } catch {
-            handleError(.networkError)
+            if preserveExistingUI {
+                dataState = .success
+            } else {
+                dataState = .error(error: .networkError)
+            }
         }
     }
     
     func retryFetch(isRefresh: Bool) async {
-        await loadHighlights()
+        await loadHighlights(forceNetwork: true)
     }
     
     /**
@@ -169,12 +173,6 @@ class HighlightsViewModel: ObservableObject {
         switch highlight {
         case .video(let video): return video.title
         case .article(let article): return article.title
-        }
-    }
-
-    func handleError(_ error: ScoreError) {
-        DispatchQueue.main.async {
-            self.dataState = .error(error: error)
         }
     }
 }

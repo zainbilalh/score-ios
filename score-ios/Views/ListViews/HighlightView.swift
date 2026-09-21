@@ -16,11 +16,13 @@ struct HighlightView: View {
             switch viewModel.dataState {
             case .idle, .loading:
                 HighlightLoadingView()
-                
-            default:
-                VStack{
+
+            case .error:
+                HighlightErrorView()
+
+            case .success:
+                VStack {
                     headerView
-                    
                     HighlightContentView()
                 }
             }
@@ -89,9 +91,7 @@ struct HighlightContentView: View {
             }
         }
         .refreshable {
-            await Task.detached { @MainActor in
-                await viewModel.loadHighlights()
-            }.value
+            await viewModel.loadHighlights(forceNetwork: true)
         }
     }
 }

@@ -12,12 +12,12 @@ import GameAPI
 // State enum to track the loading state
 enum DataState {
     case idle        // Initial state, nothing has been fetched yet
-    case loading     // Initial fetch in progress
-    case refreshing     // Refreshing in progress
-    case success     // Fetch completed successfully
-    case error(error: ScoreError) // Fetch failed with an error message
+    case loading     // Fetch in progress with nothing useful to show yet
+    case success     // Fetch completed successfully (may be empty)
+    case error(error: ScoreError) // Fetch failed and we have no content to keep showing
 }
 
+@MainActor
 class GamesViewModel: ObservableObject
 {
     @Published var dataState: DataState = .idle
@@ -76,23 +76,35 @@ class GamesViewModel: ObservableObject
         }
     }
 
-    @MainActor
-    func loadGames() async {
-        let isInitialLoad = hasNotFetchedYet
-        if isInitialLoad {
+    func loadGames(forceNetwork: Bool = false) async {
+        // Soft refresh: if we already showed content, keep it on screen until a successful replace.
+        let preserveExistingUI = (dataState == .success)
+        if !preserveExistingUI {
             dataState = .loading
         }
+
         privateUpcomingGames.removeAll()
         privatePastGames.removeAll()
+
         do {
             var all: [GamesQuery.Data.Game] = []
             var offset = 0
             let limit = 50
+
             while true {
-                let page = try await NetworkManager.shared.fetchGames(limit: limit, offset: offset)
+                let page = try await NetworkManager.shared.fetchGames(
+                    limit: limit,
+                    offset: offset,
+                    forceNetwork: forceNetwork
+                )
                 if page.isEmpty {
                     if offset == 0 {
-                        dataState = .error(error: .emptyData)
+                        if preserveExistingUI {
+                            // Successful empty response — replace previous content.
+                            processGames([])
+                        } else {
+                            dataState = .error(error: .emptyData)
+                        }
                         return
                     }
                     break
@@ -103,14 +115,18 @@ class GamesViewModel: ObservableObject
             }
             processGames(all)
         } catch is CancellationError {
-            // SwiftUI cancels pull-to-refresh when @Published updates rebuild the view.
-            if isInitialLoad && games.isEmpty {
-                dataState = .idle
-            } else {
+            // Keep existing UI if we had a successful load; otherwise allow a fresh attempt.
+            if preserveExistingUI {
                 dataState = .success
+            } else {
+                dataState = .idle
             }
         } catch {
-            dataState = .error(error: .networkError)
+            if preserveExistingUI {
+                dataState = .success
+            } else {
+                dataState = .error(error: .networkError)
+            }
         }
     }
 
@@ -176,8 +192,8 @@ class GamesViewModel: ObservableObject
     }
 
     // Method to retry after an error
-    func retryFetch () async {
-        await loadGames()
+    func retryFetch() async {
+        await loadGames(forceNetwork: true)
     }
 }
 
