@@ -52,9 +52,8 @@ struct UpcomingGamesView: View {
                 }
             }
             .task {
-                if vm.hasNotFetchedYet {
-                    await vm.loadGames()
-                }
+                guard vm.hasNotFetchedYet else { return }
+                await vm.loadGames()
             }
             .refreshable {
                 await vm.loadGames(forceNetwork: true)
